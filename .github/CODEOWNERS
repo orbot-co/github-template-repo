@@ -1,0 +1,46 @@
+# CODEOWNERS
+# This file defines code ownership for automatic PR reviewers
+
+# Global owners
+* @username @co-maintainer
+
+# Documentation
+/docs/ @username
+/README.md @username
+/CONTRIBUTING.md @username
+
+# Configuration
+/.github/ @username
+/package.json @username
+/tsconfig.json @username
+.eslintrc* @username
+.prettierrc @username
+
+# Source code
+/src/ @username @co-maintainer
+/src/api/ @api-team
+/src/database/ @database-team
+/src/auth/ @security-team
+
+# Tests
+/tests/ @qa-team
+/src/**/*.test.ts @qa-team
+/src/**/*.spec.ts @qa-team
+
+# Docker and deployment
+/Dockerfile @devops-team
+/docker-compose.yml @devops-team
+/.github/workflows/ @devops-team
+/kubernetes/ @devops-team
+/nginx.conf @devops-team
+
+# Scripts
+/scripts/ @devops-team
+
+# Security
+/SECURITY.md @security-team
+/.github/workflows/security.yml @security-team
+
+# Performance
+/docs/performance/ @performance-team
+/benchmarks/ @performance-team

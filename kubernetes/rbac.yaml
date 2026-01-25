@@ -10,12 +10,12 @@ metadata:
   name: app-role
   namespace: default
 rules:
-- apiGroups: [""]
-  resources: ["configmaps"]
-  verbs: ["get", "list", "watch"]
-- apiGroups: [""]
-  resources: ["secrets"]
-  verbs: ["get"]
+- apiGroups: [ "" ]
+  resources: [ "configmaps" ]
+  verbs: [ "get", "list", "watch" ]
+- apiGroups: [ "" ]
+  resources: [ "secrets" ]
+  verbs: [ "get" ]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
