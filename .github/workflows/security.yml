@@ -2,7 +2,6 @@ name: Security Audit
 
 on:
   schedule:
-    # Run daily at 2 AM UTC
     - cron: '0 2 * * *'
   pull_request:
     branches: [main, develop]
@@ -15,25 +14,23 @@ jobs:
     name: Security Checks
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: '18.x'
+          node-version: '20.x'
           cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
-      # NPM Audit
       - name: NPM Audit
         run: npm audit --audit-level=moderate
         continue-on-error: true
 
-      # Snyk Security Scan
       - name: Run Snyk Security Scan
         uses: snyk/actions/node@master
         env:
@@ -42,7 +39,6 @@ jobs:
           args: --severity-threshold=high
         continue-on-error: true
 
-      # OWASP Dependency Check
       - name: Run OWASP Dependency Check
         uses: jeremylong/DependencyCheck_Action@main
         with:
@@ -53,16 +49,14 @@ jobs:
             --enable-experimental
         continue-on-error: true
 
-      # CodeQL Analysis
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v2
+        uses: github/codeql-action/init@v3
         with:
           languages: 'javascript'
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v2
+        uses: github/codeql-action/analyze@v3
 
-      # SonarQube Analysis (optional)
       - name: SonarQube Scan
         uses: SonarSource/sonarcloud-github-action@master
         env:
@@ -77,7 +71,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Build Docker image
         run: docker build -t professional-project:latest .
@@ -90,7 +84,7 @@ jobs:
           output: 'trivy-results.sarif'
 
       - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v2
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: 'trivy-results.sarif'
 
@@ -99,7 +93,7 @@ jobs:
     name: Secret Detection
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
