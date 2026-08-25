@@ -40,7 +40,7 @@ jobs:
         continue-on-error: true
 
       - name: Run OWASP Dependency Check
-        uses: jeremylong/DependencyCheck_Action@main
+        uses: dependency-check/Dependency-Check_Action@main
         with:
           project: 'professional-project'
           path: '.'
