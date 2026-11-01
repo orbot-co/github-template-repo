@@ -1,0 +1,30 @@
+# Weekly OWASP ZAP baseline scan (passive) against staging.
+# Only scan URLs the customer owns and has approved in writing.
+name: DAST
+
+on:
+  schedule:
+    - cron: "0 3 * * 1" # Mondays 03:00 UTC
+  workflow_dispatch:
+    inputs:
+      target:
+        description: URL to scan (defaults to DAST_TARGET_URL)
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  zap:
+    name: ZAP baseline
+    if: inputs.target != '' || vars.DAST_TARGET_URL != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: zaproxy/action-baseline@66042c8e7e24680119199a017e5b0e8603bf4dae # v0.12.0
+        with:
+          target: ${{ inputs.target || vars.DAST_TARGET_URL }}
+          allow_issue_writing: false
+          fail_action: false # report only until the baseline is clean
+          cmd_options: "-a"

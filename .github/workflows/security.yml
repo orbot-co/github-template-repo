@@ -1,106 +1,113 @@
-name: Security Audit
+# OwnStack security baseline: secrets, SCA, SAST, IaC.
+# Runs on every PR and push to main, and is called by deploy.yml before any deploy.
+name: Security
 
 on:
-  schedule:
-    - cron: '0 2 * * *'
   pull_request:
-    branches: [main, develop]
   push:
-    branches: [main, develop]
+    branches: [main]
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GITLEAKS_VERSION: "8.18.4"
+  TRIVY_IMAGE: aquasec/trivy:0.56.2
+  SEMGREP_IMAGE: semgrep/semgrep:1.90.0
 
 jobs:
-  security:
+  secrets:
+    name: Secrets (Gitleaks)
     runs-on: ubuntu-latest
-    name: Security Checks
-
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          fetch-depth: 0
+          fetch-depth: 0 # scan full history, not just the last commit
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - name: Install Gitleaks (checksum verified)
+        run: |
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          file="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfLO "$base/$file"
+          curl -sSfL "$base/gitleaks_${GITLEAKS_VERSION}_checksums.txt" | grep " $file\$" | sha256sum -c -
+          sudo tar -xzf "$file" -C /usr/local/bin gitleaks
+          rm "$file"
+
+      - name: Scan
+        run: gitleaks detect --source . --redact --verbose --report-format sarif --report-path gitleaks.sarif
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
         with:
-          node-version: '20.x'
-          cache: 'npm'
+          name: gitleaks-report
+          path: gitleaks.sarif
+          if-no-files-found: ignore
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: NPM Audit
-        run: npm audit --audit-level=moderate
-        continue-on-error: true
-
-      - name: Run Snyk Security Scan
-        uses: snyk/actions/node@master
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          args: --severity-threshold=high
-        continue-on-error: true
-
-      - name: Run OWASP Dependency Check
-        uses: jeremylong/DependencyCheck_Action@main
-        with:
-          project: 'professional-project'
-          path: '.'
-          format: 'JSON'
-          args: >
-            --enable-experimental
-        continue-on-error: true
-
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
-        with:
-          languages: 'javascript'
-
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
-
-      - name: SonarQube Scan
-        uses: SonarSource/sonarcloud-github-action@master
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        if: env.SONAR_TOKEN != ''
-        continue-on-error: true
-
-  container-scan:
+  sca:
+    name: Dependencies (npm audit + Trivy)
     runs-on: ubuntu-latest
-    name: Container Security Scan
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - name: Build Docker image
-        run: docker build -t professional-project:latest .
-
-      - name: Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        if: hashFiles('package-lock.json') != ''
         with:
-          image-ref: 'professional-project:latest'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
+          node-version: 20
 
-      - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: 'trivy-results.sarif'
+      - name: npm audit (production deps, high+)
+        if: hashFiles('package-lock.json') != ''
+        run: npm audit --omit=dev --audit-level=high
 
-  secret-scan:
+      - name: Trivy filesystem scan
+        run: |
+          docker run --rm -v "$PWD:/src" "$TRIVY_IMAGE" fs /src \
+            --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 1
+
+  sast:
+    name: Code (Semgrep)
     runs-on: ubuntu-latest
-    name: Secret Detection
-
+    permissions:
+      contents: read
+      security-events: write # only used when CODE_SCANNING is enabled
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - name: TruffleHog Secret Scanning
-        uses: trufflesecurity/trufflehog@main
+      - name: Scan
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src "$SEMGREP_IMAGE" \
+            semgrep scan \
+              --config p/default \
+              --config p/owasp-top-ten \
+              --metrics off \
+              --sarif --output semgrep.sarif \
+              --error
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
         with:
-          path: ./
-          base: ${{ github.event.repository.default_branch }}
-          head: HEAD
-          extra_args: --debug
+          name: semgrep-report
+          path: semgrep.sarif
+          if-no-files-found: ignore
+
+      # Private repos need GitHub Code Security for this; set repo variable CODE_SCANNING=true to enable.
+      - uses: github/codeql-action/upload-sarif@4bfa242aa49c5f7c6770b98670d354a7dfac05f8 # v3.39.1
+        if: always() && vars.CODE_SCANNING == 'true'
+        with:
+          sarif_file: semgrep.sarif
+
+  iac:
+    name: Infrastructure (Trivy config)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Scan Dockerfile, Terraform, task definitions
+        run: |
+          docker run --rm -v "$PWD:/src" "$TRIVY_IMAGE" config /src \
+            --severity HIGH,CRITICAL \
+            --exit-code 1

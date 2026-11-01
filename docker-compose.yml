@@ -2,6 +2,11 @@ version: '3.8'
 
 services:
   app:
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
     build:
       context: .
       dockerfile: Dockerfile
@@ -24,6 +29,12 @@ services:
     restart: unless-stopped
 
   postgres:
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run/postgresql
     image: postgres:15-alpine
     ports:
       - "5432:5432"
@@ -43,6 +54,9 @@ services:
     restart: unless-stopped
 
   redis:
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
     image: redis:7-alpine
     ports:
       - "6379:6379"
@@ -58,6 +72,13 @@ services:
     restart: unless-stopped
 
   nginx:
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
     image: nginx:alpine
     ports:
       - "80:80"
